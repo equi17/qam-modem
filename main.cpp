@@ -6,8 +6,18 @@
 #include <complex>
 #include <fstream>
 
+constexpr double SQRT_2 = 1.41421356237;
 constexpr double SQRT_10 = 3.16227766017;
-constexpr int BITS_PER_SYMBOL = 4;
+constexpr double SQRT_42 = 6.48074069841;
+
+constexpr double AVG_SYMBOL_ENERGY = 1.0;
+
+constexpr std::complex<double> QPSK_SYMBOLS[4] = {
+    { 1.0/SQRT_2,  1.0/SQRT_2}, // 00
+    { 1.0/SQRT_2, -1.0/SQRT_2}, // 01
+    {-1.0/SQRT_2,  1.0/SQRT_2}, // 11
+    {-1.0/SQRT_2, -1.0/SQRT_2}  // 10
+};
 
 constexpr std::complex<double> QAM16_SYMBOLS[16] = {
     {-3.0/SQRT_10,  3.0/SQRT_10}, // 0000
@@ -31,35 +41,127 @@ constexpr std::complex<double> QAM16_SYMBOLS[16] = {
     { 3.0/SQRT_10, -3.0/SQRT_10}  // 1010
 };
 
-class QAM16Modulator {
-public:
-    std::vector<std::complex<double>> modulate(const std::vector<bool>& bits) {
-        size_t padded_len = bits.size() + (BITS_PER_SYMBOL - (bits.size() % BITS_PER_SYMBOL)) % BITS_PER_SYMBOL;
-        std::vector<std::complex<double>> symbols;
-        symbols.reserve(padded_len / BITS_PER_SYMBOL);
+constexpr std::complex<double> QAM64_SYMBOLS[64] = {
+    {-7.0/SQRT_42,  7.0/SQRT_42}, {-7.0/SQRT_42,  5.0/SQRT_42}, 
+    {-7.0/SQRT_42,  3.0/SQRT_42}, {-7.0/SQRT_42,  1.0/SQRT_42},
+    {-7.0/SQRT_42, -1.0/SQRT_42}, {-7.0/SQRT_42, -3.0/SQRT_42},
+    {-7.0/SQRT_42, -5.0/SQRT_42}, {-7.0/SQRT_42, -7.0/SQRT_42},
 
-        for (size_t i = 0; i < padded_len; i += BITS_PER_SYMBOL) {
+    {-5.0/SQRT_42,  7.0/SQRT_42}, {-5.0/SQRT_42,  5.0/SQRT_42},
+    {-5.0/SQRT_42,  3.0/SQRT_42}, {-5.0/SQRT_42,  1.0/SQRT_42},
+    {-5.0/SQRT_42, -1.0/SQRT_42}, {-5.0/SQRT_42, -3.0/SQRT_42},
+    {-5.0/SQRT_42, -5.0/SQRT_42}, {-5.0/SQRT_42, -7.0/SQRT_42},
+
+    {-3.0/SQRT_42,  7.0/SQRT_42}, {-3.0/SQRT_42,  5.0/SQRT_42},
+    {-3.0/SQRT_42,  3.0/SQRT_42}, {-3.0/SQRT_42,  1.0/SQRT_42},
+    {-3.0/SQRT_42, -1.0/SQRT_42}, {-3.0/SQRT_42, -3.0/SQRT_42},
+    {-3.0/SQRT_42, -5.0/SQRT_42}, {-3.0/SQRT_42, -7.0/SQRT_42},
+
+    {-1.0/SQRT_42,  7.0/SQRT_42}, {-1.0/SQRT_42,  5.0/SQRT_42},
+    {-1.0/SQRT_42,  3.0/SQRT_42}, {-1.0/SQRT_42,  1.0/SQRT_42},
+    {-1.0/SQRT_42, -1.0/SQRT_42}, {-1.0/SQRT_42, -3.0/SQRT_42},
+    {-1.0/SQRT_42, -5.0/SQRT_42}, {-1.0/SQRT_42, -7.0/SQRT_42},
+
+    { 1.0/SQRT_42,  7.0/SQRT_42}, { 1.0/SQRT_42,  5.0/SQRT_42},
+    { 1.0/SQRT_42,  3.0/SQRT_42}, { 1.0/SQRT_42,  1.0/SQRT_42},
+    { 1.0/SQRT_42, -1.0/SQRT_42}, { 1.0/SQRT_42, -3.0/SQRT_42},
+    { 1.0/SQRT_42, -5.0/SQRT_42}, { 1.0/SQRT_42, -7.0/SQRT_42},
+
+    { 3.0/SQRT_42,  7.0/SQRT_42}, { 3.0/SQRT_42,  5.0/SQRT_42},
+    { 3.0/SQRT_42,  3.0/SQRT_42}, { 3.0/SQRT_42,  1.0/SQRT_42},
+    { 3.0/SQRT_42, -1.0/SQRT_42}, { 3.0/SQRT_42, -3.0/SQRT_42},
+    { 3.0/SQRT_42, -5.0/SQRT_42}, { 3.0/SQRT_42, -7.0/SQRT_42},
+
+    { 5.0/SQRT_42,  7.0/SQRT_42}, { 5.0/SQRT_42,  5.0/SQRT_42},
+    { 5.0/SQRT_42,  3.0/SQRT_42}, { 5.0/SQRT_42,  1.0/SQRT_42},
+    { 5.0/SQRT_42, -1.0/SQRT_42}, { 5.0/SQRT_42, -3.0/SQRT_42},
+    { 5.0/SQRT_42, -5.0/SQRT_42}, { 5.0/SQRT_42, -7.0/SQRT_42},
+
+    { 7.0/SQRT_42,  7.0/SQRT_42}, { 7.0/SQRT_42,  5.0/SQRT_42},
+    { 7.0/SQRT_42,  3.0/SQRT_42}, { 7.0/SQRT_42,  1.0/SQRT_42},
+    { 7.0/SQRT_42, -1.0/SQRT_42}, { 7.0/SQRT_42, -3.0/SQRT_42},
+    { 7.0/SQRT_42, -5.0/SQRT_42}, { 7.0/SQRT_42, -7.0/SQRT_42}
+};
+
+enum class ModulationType { QPSK, QAM16, QAM64 };
+
+class QAMModulator {
+    ModulationType type;
+    int bits_per_symbol;
+    std::vector<std::complex<double>> constellation;
+
+public:
+    QAMModulator(ModulationType type) : type(type) {
+        switch (type) {
+            case ModulationType::QPSK:
+                bits_per_symbol = 2;
+                constellation.reserve(4);
+                std::copy(&QPSK_SYMBOLS[0], &QPSK_SYMBOLS[4], std::back_inserter(constellation));
+                break;
+            case ModulationType::QAM16:
+                bits_per_symbol = 4;
+                constellation.reserve(16);
+                std::copy(&QAM16_SYMBOLS[0], &QAM16_SYMBOLS[16], std::back_inserter(constellation));
+                break;
+            case ModulationType::QAM64:
+                bits_per_symbol = 6;
+                constellation.reserve(64);
+                std::copy(&QAM64_SYMBOLS[0], &QAM64_SYMBOLS[64], std::back_inserter(constellation));
+                break;
+        }
+    }
+
+    std::vector<std::complex<double>> modulate(const std::vector<bool>& bits) {
+        size_t padded_len = bits.size() + (bits_per_symbol - (bits.size() % bits_per_symbol)) % bits_per_symbol;
+        std::vector<std::complex<double>> symbols;
+        symbols.reserve(padded_len / bits_per_symbol);
+
+        for (size_t i = 0; i < padded_len; i += bits_per_symbol) {
             int idx = 0;
-            for (size_t j = 0; j < BITS_PER_SYMBOL; ++j) {
+            for (size_t j = 0; j < bits_per_symbol; ++j) {
                 const bool bit = (i + j < bits.size()) ? bits[i + j] : false;
-                idx |= (bit << (BITS_PER_SYMBOL - 1 - j));
+                idx |= (bit << (bits_per_symbol - 1 - j));
             }
-            symbols.push_back(QAM16_SYMBOLS[idx]);
+            symbols.push_back(constellation[idx]);
         }
 
         return symbols;
     }
 };
 
-class QAM16Demodulator {
+class QAMDemodulator {
+ModulationType type;
+int bits_per_symbol;
+std::vector<std::complex<double>> constellation;
+
 public:
+    QAMDemodulator(ModulationType type) : type(type) {
+        switch (type) {
+            case ModulationType::QPSK:
+                bits_per_symbol = 2;
+                constellation.reserve(4);
+                std::copy(&QPSK_SYMBOLS[0], &QPSK_SYMBOLS[4], std::back_inserter(constellation));
+                break;
+            case ModulationType::QAM16:
+                bits_per_symbol = 4;
+                constellation.reserve(16);
+                std::copy(&QAM16_SYMBOLS[0], &QAM16_SYMBOLS[16], std::back_inserter(constellation));
+                break;
+            case ModulationType::QAM64:
+                bits_per_symbol = 6;
+                constellation.reserve(64);
+                std::copy(&QAM64_SYMBOLS[0], &QAM64_SYMBOLS[64], std::back_inserter(constellation));
+                break;
+        }
+    }
+    
     std::vector<bool> demodulate(const std::vector<std::complex<double>>& symbols) {
         std::vector<bool> bits;
-        bits.reserve(symbols.size() * BITS_PER_SYMBOL);
+        bits.reserve(symbols.size() * bits_per_symbol);
 
         for (const auto& sym : symbols) {
             int closest_idx = find_closest_index(sym);
-            for (int j = BITS_PER_SYMBOL - 1; j >= 0; --j) {
+            for (int j = bits_per_symbol - 1; j >= 0; --j) {
                 bits.push_back((closest_idx >> j) & 1);
             }
         }
@@ -72,8 +174,8 @@ private:
         double min_dist = std::numeric_limits<double>::infinity();
         int closest_idx = 0;
 
-        for (int i = 0; i < 16; ++i) {
-            double dist = std::norm(symbol - QAM16_SYMBOLS[i]);
+        for (int i = 0; i < constellation.size(); ++i) {
+            double dist = std::norm(symbol - constellation[i]);
             if (dist < min_dist) {
                 min_dist = dist;
                 closest_idx = i;
@@ -130,48 +232,75 @@ public:
 
 int main() {
     size_t num_bits;
-    double start_variance, end_variance, step_size;
+    double start_snr_db, end_snr_db, snr_step_db;
+    int modulation_type;
+
+    std::cout << "Выберите тип модуляции (0-QPSK, 1-QAM16, 2-QAM64): ";
+    std::cin >> modulation_type;
+    
+    ModulationType mod_type;
+    switch (modulation_type) {
+        case 0: mod_type = ModulationType::QPSK; break;
+        case 1: mod_type = ModulationType::QAM16; break;
+        case 2: mod_type = ModulationType::QAM64; break;
+        default:
+            std::cerr << "Неверный тип модуляции\n";
+            return 1;
+    }
 
     std::cout << "Введите количество бит: ";
     std::cin >> num_bits;
 
-    std::cout << "Введите начальную дисперсию (σ²): ";
-    std::cin >> start_variance;
+    std::cout << "Введите начальное SNR (dB): ";
+    std::cin >> start_snr_db;
+    
+    std::cout << "Введите конечное SNR (dB): ";
+    std::cin >> end_snr_db;
+    
+    std::cout << "Введите шаг по SNR (dB): ";
+    std::cin >> snr_step_db;
 
-    std::cout << "Введите конечную дисперсию (σ²): ";
-    std::cin >> end_variance;
+    std::string filename;
+    switch (mod_type) {
+        case ModulationType::QPSK: filename = "qpsk_ber.csv"; break;
+        case ModulationType::QAM16: filename = "qam16_ber.csv"; break;
+        case ModulationType::QAM64: filename = "qam64_ber.csv"; break;
+    }
 
-    std::cout << "Введите шаг по дисперсии (σ²): ";
-    std::cin >> step_size;
+    double Es = AVG_SYMBOL_ENERGY;
 
-    std::ofstream out_file("ber.csv");
-    out_file << "noise_variance,ber\n";
+    std::ofstream out_file(filename);
+    out_file << "snr_db,ber\n";
 
-    QAM16Modulator mod;
-    QAM16Demodulator demod;
-    AWGN noise(sqrt(start_variance));
+    QAMModulator mod(mod_type);
+    QAMDemodulator demod(mod_type);
+    AWGN noise(0.1);
     BitGenerator gen;
 
     std::vector<bool> bits = gen.generate(num_bits);
     std::vector<std::complex<double>> modulated_clean = mod.modulate(bits);
 
-    for (double noise_variance = start_variance; noise_variance <= end_variance + 1e-9; noise_variance += step_size) {
+    for (double snr_db = start_snr_db; snr_db <= end_snr_db + 1e-9; snr_db += snr_step_db) {
+        double snr_linear = pow(10.0, snr_db / 10.0);
+        double noise_variance = Es / (2.0 * snr_linear);
+        
         noise.update_stddev(sqrt(noise_variance));
         auto modulated = modulated_clean;
         noise.add_noise(modulated);
+        
         std::vector<bool> out = demod.demodulate(modulated);
 
         int errors = 0;
-        for (size_t j = 0; j < num_bits; ++j) {
+        for (size_t j = 0; j < bits.size(); ++j) {
             if (bits[j] != out[j]) ++errors;
         }
 
-        double ber = static_cast<double>(errors) / num_bits;
-        out_file << noise_variance << ',' << ber << '\n';
+        double ber = static_cast<double>(errors) / bits.size();
+        out_file << snr_db << ',' << ber << '\n';
     }
 
     out_file.close();
-    std::cout << "Данные записаны в ber.csv" << '\n';
+    std::cout << "Данные записаны в " << filename << '\n';
 
     return 0;
 }
